@@ -26,3 +26,7 @@
   package declarations and 37 deduplicated local notice texts verified. Full native
   and pinned Cargo gates, both Nix shell definitions, and all five lifecycle PTYs
   passed; Nix required sandbox permission for cache/daemon access.
+- Publication preparation: audited all eight commits and original screenshots;
+  no credentials or committed build artifacts found. Added local environment/key
+  exclusions. Public source publication as enriquessosa/pulse-systemd approved;
+  existing license/distribution caveats remain. Creation/push/hosted CI pending.

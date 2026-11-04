@@ -1,2 +1,14 @@
 /target/
 /result
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+/.direnv/
+/secrets/
+/credentials/
+*.pem
+*.key
+*.p12
+*.pfx
