@@ -57,7 +57,7 @@ fn renders_loading_help_and_tiny_terminals_without_panics() {
         "PageUp/PageDown",
         "Ctrl-U",
         "Tab:",
-        "Read-only startup snapshot",
+        "refresh current view",
     ] {
         assert!(output.contains(expected), "{expected}");
     }
@@ -211,4 +211,69 @@ fn inspection_renders_loading_properties_logs_errors_and_empty_results() {
     let output = draw(&app, 80, 24);
     assert!(output.contains("Enter: inspect"));
     assert!(output.contains("Left/Right pan"));
+}
+
+#[test]
+fn refresh_displays_stale_data_age_and_error_until_successful_recovery() {
+    use pulse::{
+        inspection::{InspectError, InspectionPart, InspectionReport},
+        parsing::parse_properties,
+        process::RunError,
+        systemd::{DiscoveryError, ScopeDiscovery},
+    };
+    let mut app = populated();
+    app.refresh_discovery();
+    let output = draw(&app, 100, 24);
+    for expected in ["STALE", "Refreshing", "alpha.service", "Last success"] {
+        assert!(output.contains(expected), "{expected}");
+    }
+    app.apply_discovery(ScopeDiscovery {
+        scope: Scope::User,
+        result: Err(DiscoveryError::Process(RunError::TimedOut)),
+    });
+    let output = draw(&app, 100, 24);
+    assert!(output.contains("Last refresh ERROR"));
+    assert!(output.contains("timed out"));
+    assert!(output.contains("STALE") && output.contains("alpha.service"));
+    app.apply_discovery(report(Scope::User, services(Scope::User)));
+    app.apply_discovery(report(Scope::System, services(Scope::System)));
+    assert!(!draw(&app, 100, 24).contains("STALE"));
+    key(&mut app, KeyCode::Enter);
+    let selected = app.selected_key().cloned().unwrap();
+    app.inspection.as_mut().unwrap().request_id = Some(1);
+    app.apply_inspection(InspectionReport {
+        id: 1,
+        key: selected.clone(),
+        part: InspectionPart::Properties(Ok(parse_properties(b"MainPID=123").unwrap())),
+    });
+    app.inspection.as_mut().unwrap().refresh();
+    let output = draw(&app, 80, 24);
+    assert!(output.contains("STALE") && output.contains("MainPID: 123"));
+    app.inspection.as_mut().unwrap().request_id = Some(2);
+    app.apply_inspection(InspectionReport {
+        id: 2,
+        key: selected.clone(),
+        part: InspectionPart::Properties(Err(InspectError::PermissionDenied(
+            "Permission denied".into(),
+        ))),
+    });
+    let output = draw(&app, 80, 24);
+    assert!(
+        output.contains("STALE")
+            && output.contains("Permission denied")
+            && output.contains("MainPID: 123")
+    );
+    app.inspection.as_mut().unwrap().refresh();
+    app.inspection.as_mut().unwrap().request_id = Some(3);
+    app.apply_inspection(InspectionReport {
+        id: 3,
+        key: selected,
+        part: InspectionPart::Properties(Ok(parse_properties(b"MainPID=456").unwrap())),
+    });
+    let output = draw(&app, 80, 24);
+    assert!(
+        !output.contains("STALE")
+            && !output.contains("Permission denied")
+            && output.contains("MainPID: 456")
+    );
 }

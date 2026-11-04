@@ -1,7 +1,9 @@
 use crate::{
+    freshness::Freshness,
     inspection::{Inspection, InspectionReport, InspectionTab},
     model::{ActiveState, Scope, Service},
     systemd::{Discovery, ScopeDiscovery},
+    worker::DiscoveryReport,
 };
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 
@@ -79,6 +81,7 @@ pub enum ScopeStatus {
 pub struct ScopeState {
     pub scope: Scope,
     pub status: ScopeStatus,
+    pub freshness: Freshness,
 }
 
 pub use crate::model::ServiceKey;
@@ -90,6 +93,8 @@ pub struct App {
     pub scope_filter: ScopeFilter,
     pub state_filter: StateFilter,
     pub inspection: Option<Inspection>,
+    pub discovery_refresh_requested: bool,
+    pub discovery_request_id: Option<u64>,
     query: String,
     search_snapshot: Option<(String, Option<ServiceKey>)>,
     selected: Option<ServiceKey>,
@@ -103,10 +108,13 @@ impl Default for App {
             scopes: [Scope::System, Scope::User].map(|scope| ScopeState {
                 scope,
                 status: ScopeStatus::Loading,
+                freshness: Freshness::default(),
             }),
             scope_filter: ScopeFilter::All,
             state_filter: StateFilter::All,
             inspection: None,
+            discovery_refresh_requested: false,
+            discovery_request_id: None,
             query: String::new(),
             search_snapshot: None,
             selected: None,
@@ -202,21 +210,52 @@ impl App {
             .iter_mut()
             .find(|scope| scope.scope == report.scope)
         {
-            scope.status = match report.result {
-                Ok(data) => ScopeStatus::Ready(data),
-                Err(error) => ScopeStatus::Failed(error.to_string()),
-            };
+            match report.result {
+                Ok(data) => {
+                    scope.freshness.succeeded();
+                    scope.status = ScopeStatus::Ready(data);
+                }
+                Err(error) => {
+                    let error = error.to_string();
+                    scope.freshness.failed(error.clone());
+                    if !matches!(scope.status, ScopeStatus::Ready(_)) {
+                        scope.status = ScopeStatus::Failed(error);
+                    }
+                }
+            }
         }
         self.reconcile_selection();
     }
 
     pub fn discovery_stopped(&mut self) {
         for scope in &mut self.scopes {
-            if matches!(scope.status, ScopeStatus::Loading) {
-                scope.status = ScopeStatus::Failed(
-                    "Discovery worker stopped before reporting this scope".into(),
-                );
+            if scope.freshness.refreshing {
+                let error = "Discovery worker stopped before reporting this scope".to_string();
+                scope.freshness.failed(error.clone());
+                if !matches!(scope.status, ScopeStatus::Ready(_)) {
+                    scope.status = ScopeStatus::Failed(error);
+                }
             }
+        }
+    }
+
+    pub fn refresh_discovery(&mut self) {
+        self.discovery_request_id = None;
+        self.discovery_refresh_requested = true;
+        for scope in &mut self.scopes {
+            scope.freshness.begin();
+            if !matches!(scope.status, ScopeStatus::Ready(_)) {
+                scope.status = ScopeStatus::Loading;
+            }
+        }
+    }
+
+    pub fn apply_discovery_refresh(&mut self, report: DiscoveryReport) {
+        if Some(report.id) == self.discovery_request_id {
+            self.apply_discovery(ScopeDiscovery {
+                scope: report.scope,
+                result: report.result,
+            });
         }
     }
 
@@ -293,6 +332,7 @@ impl App {
                 code => {
                     if let Some(inspection) = &mut self.inspection {
                         match code {
+                            KeyCode::Char('r') => inspection.refresh(),
                             KeyCode::Tab => inspection.switch_tab(),
                             KeyCode::Up | KeyCode::Char('k') => inspection.scroll(-1),
                             KeyCode::Down | KeyCode::Char('j') => inspection.scroll(1),
@@ -317,6 +357,7 @@ impl App {
             return;
         }
         match key.code {
+            KeyCode::Char('r') => self.refresh_discovery(),
             KeyCode::Enter => self.open_inspection(InspectionTab::Properties),
             KeyCode::Char('l') => self.open_inspection(InspectionTab::Journal),
             KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,

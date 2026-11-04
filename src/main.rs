@@ -23,11 +23,16 @@ fn run() -> io::Result<()> {
     let result = terminal::run(|terminal| {
         let worker = worker.insert(DiscoveryWorker::spawn(ProcessRunner::default())?);
         let mut app = App::default();
+        app.discovery_request_id = Some(worker.last_request_id());
         let mut view = ui::View::default();
         while !app.should_quit {
+            if app.discovery_refresh_requested {
+                app.discovery_request_id = Some(worker.request(())?);
+                app.discovery_refresh_requested = false;
+            }
             loop {
                 match worker.try_recv() {
-                    Ok(report) => app.apply_discovery(report),
+                    Ok(report) => app.apply_discovery_refresh(report),
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => {
                         app.discovery_stopped();
@@ -71,7 +76,7 @@ fn run() -> io::Result<()> {
                 app.handle_event(event::read()?);
             }
         }
-        worker.cancel();
+        worker.cancel_current();
         if let Some(inspector) = &inspector {
             inspector.cancel_current();
         }

@@ -1,4 +1,5 @@
 use crate::{
+    freshness::Freshness,
     model::{Journal, Properties, Property, ServiceKey, display_text, valid_service_name},
     parsing::ParseError,
     process::{CommandOutput, RunError, Runner},
@@ -125,6 +126,25 @@ pub enum ReadState<T> {
     Ready(T),
     Failed(InspectError),
 }
+
+fn complete<T>(
+    state: &mut ReadState<T>,
+    freshness: &mut Freshness,
+    result: Result<T, InspectError>,
+) {
+    match result {
+        Ok(data) => {
+            *state = ReadState::Ready(data);
+            freshness.succeeded();
+        }
+        Err(error) => {
+            freshness.failed(format!("{}: {error}", error.label()));
+            if !matches!(state, ReadState::Ready(_)) {
+                *state = ReadState::Failed(error);
+            }
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum InspectionTab {
     #[default]
@@ -137,6 +157,8 @@ pub struct Inspection {
     pub request_id: Option<u64>,
     pub properties: ReadState<Properties>,
     pub journal: ReadState<Journal>,
+    pub properties_freshness: Freshness,
+    pub journal_freshness: Freshness,
     pub tab: InspectionTab,
     pub row: usize,
     pub column: usize,
@@ -145,11 +167,19 @@ pub struct Inspection {
 }
 impl Inspection {
     pub fn worker_stopped(&mut self) {
-        if matches!(self.properties, ReadState::Loading) {
-            self.properties = ReadState::Failed(InspectError::WorkerStopped);
+        if self.properties_freshness.refreshing {
+            complete(
+                &mut self.properties,
+                &mut self.properties_freshness,
+                Err(InspectError::WorkerStopped),
+            );
         }
-        if matches!(self.journal, ReadState::Loading) {
-            self.journal = ReadState::Failed(InspectError::WorkerStopped);
+        if self.journal_freshness.refreshing {
+            complete(
+                &mut self.journal,
+                &mut self.journal_freshness,
+                Err(InspectError::WorkerStopped),
+            );
         }
     }
     pub fn new(key: ServiceKey, tab: InspectionTab) -> Self {
@@ -158,6 +188,8 @@ impl Inspection {
             request_id: None,
             properties: ReadState::Loading,
             journal: ReadState::Loading,
+            properties_freshness: Freshness::default(),
+            journal_freshness: Freshness::default(),
             tab,
             row: 0,
             column: 0,
@@ -171,16 +203,10 @@ impl Inspection {
         }
         match report.part {
             InspectionPart::Properties(result) => {
-                self.properties = match result {
-                    Ok(data) => ReadState::Ready(data),
-                    Err(error) => ReadState::Failed(error),
-                }
+                complete(&mut self.properties, &mut self.properties_freshness, result);
             }
             InspectionPart::Journal(result) => {
-                self.journal = match result {
-                    Ok(data) => ReadState::Ready(data),
-                    Err(error) => ReadState::Failed(error),
-                }
+                complete(&mut self.journal, &mut self.journal_freshness, result);
             }
         }
         self.row = self.row.min(self.lines().len().saturating_sub(1));
@@ -192,6 +218,25 @@ impl Inspection {
         };
         self.row = 0;
         self.column = 0;
+    }
+
+    pub fn refresh(&mut self) {
+        self.request_id = None;
+        self.properties_freshness.begin();
+        self.journal_freshness.begin();
+        if !matches!(self.properties, ReadState::Ready(_)) {
+            self.properties = ReadState::Loading;
+        }
+        if !matches!(self.journal, ReadState::Ready(_)) {
+            self.journal = ReadState::Loading;
+        }
+    }
+
+    pub fn freshness(&self) -> &Freshness {
+        match self.tab {
+            InspectionTab::Properties => &self.properties_freshness,
+            InspectionTab::Journal => &self.journal_freshness,
+        }
     }
     pub fn lines(&self) -> Vec<String> {
         fn error(error: &InspectError) -> Vec<String> {
@@ -252,6 +297,19 @@ impl Inspection {
             && self.tab == InspectionTab::Journal
         {
             lines.insert(0, "[Journal display truncated]".into());
+        }
+        let failed = match self.tab {
+            InspectionTab::Properties => matches!(self.properties, ReadState::Failed(_)),
+            InspectionTab::Journal => matches!(self.journal, ReadState::Failed(_)),
+        };
+        if !failed && let Some(error) = &self.freshness().last_error {
+            lines.insert(
+                0,
+                format!(
+                    "Last refresh error: {}",
+                    crate::parsing::bounded_line(error).0
+                ),
+            );
         }
         lines
     }

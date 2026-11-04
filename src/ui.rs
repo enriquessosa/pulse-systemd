@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Row, Table, TableState, Wrap},
 };
 
-const HELP: &str = "Keyboard help\n\nUp/Down or k/j: move selection\nPageUp/PageDown: move one visible page\nHome/End: first/last service\n/: edit case-insensitive search (name or description)\nEnter: accept search; Esc: cancel edit\nBackspace: delete; Ctrl-U: clear search while editing\nTab: scope all / system / user\nf: active-state filter all / active / failed / inactive\n?: toggle help; Esc: close help\nq or Esc: quit while browsing; Ctrl-C: quit in any mode\n\nRead-only startup snapshot; refresh is not implemented yet.\nEnter: inspect selected service; l: open journal\nInspection: Tab switches properties/journal; Esc returns to list\nInspection: arrows/paging scroll; Left/Right pan; [/] select service\nRead-only always; no service controls.";
+const HELP: &str = "Keyboard help\n\nUp/Down or k/j: move selection\nPageUp/PageDown: move one visible page\nHome/End: first/last service\n/: edit case-insensitive search (name or description)\nEnter: accept search; Esc: cancel edit\nBackspace: delete; Ctrl-U: clear search while editing\nTab: scope all / system / user\nf: active-state filter all / active / failed / inactive\n?: toggle help; Esc: close help\nq or Esc: quit while browsing; Ctrl-C: quit in any mode\n\nr: refresh current view (manual only); stale data stays visible.\nEnter: inspect selected service; l: open journal\nInspection: Tab switches properties/journal; Esc returns to list\nInspection: arrows/paging scroll; Left/Right pan; [/] select service\nRead-only always; no service controls.";
 
 #[derive(Default)]
 pub struct View {
@@ -56,6 +56,8 @@ fn empty_message(app: &App) -> &'static str {
         .any(|scope| matches!(scope.status, ScopeStatus::Failed(_)))
     {
         "No services available; a selected scope failed. See status above."
+    } else if relevant.iter().any(|scope| scope.freshness.is_stale()) {
+        "Last successful snapshot is empty. See refresh status above."
     } else {
         "No services reported by the selected managers."
     }
@@ -94,12 +96,13 @@ impl View {
                 Constraint::Length(1),
                 Constraint::Length(2),
                 Constraint::Length(1),
+                Constraint::Length(2),
                 Constraint::Min(3),
                 Constraint::Length(1),
             ])
             .split(area);
             frame.render_widget(
-                Paragraph::new("Pulse | read-only | inspection snapshot (no refresh)"),
+                Paragraph::new("Pulse | read-only | r refresh inspection (manual)"),
                 regions[0],
             );
             frame.render_widget(
@@ -116,13 +119,21 @@ impl View {
                 InspectionTab::Journal => "Properties   [Journal (last 100 entries)]",
             };
             frame.render_widget(Paragraph::new(tabs), regions[2]);
+            let mut freshness = inspection.freshness().summary();
+            if let Some(error) = &inspection.freshness().last_error {
+                freshness.push_str(&format!("\n{}", diagnostic(error)));
+            }
+            frame.render_widget(
+                Paragraph::new(freshness).wrap(Wrap { trim: false }),
+                regions[3],
+            );
             let lines: Vec<Line> = inspection.lines().into_iter().map(Line::from).collect();
             self.inspection_column_limit = lines
                 .iter()
                 .map(Line::width)
                 .max()
                 .unwrap_or(0)
-                .saturating_sub(regions[3].width.saturating_sub(2) as usize);
+                .saturating_sub(regions[4].width.saturating_sub(2) as usize);
             let title = format!(
                 "Line {}/{} | column {} | arrows scroll/pan",
                 inspection.row + 1,
@@ -133,12 +144,12 @@ impl View {
                 Paragraph::new(lines)
                     .block(Block::bordered().title(title))
                     .scroll((inspection.row as u16, inspection.column as u16)),
-                regions[3],
-            );
-            self.inspection_page_size = regions[3].height.saturating_sub(2) as usize;
-            frame.render_widget(
-                Paragraph::new("Tab properties/logs  [/] service  Esc back  ? help  q quit"),
                 regions[4],
+            );
+            self.inspection_page_size = regions[4].height.saturating_sub(2) as usize;
+            frame.render_widget(
+                Paragraph::new("r refresh  Tab properties/logs  [/] service  Esc back  q quit"),
+                regions[5],
             );
             return;
         }
@@ -147,24 +158,42 @@ impl View {
             .iter()
             .map(|scope| {
                 let (text, color, height) = match &scope.status {
-                    ScopeStatus::Loading => {
-                        (format!("{}: Loading...", scope.scope), Color::Yellow, 1)
-                    }
-                    ScopeStatus::Ready(data) if data.warning.is_empty() => (
-                        format!("{}: {} services reported", scope.scope, data.services.len()),
-                        Color::Green,
-                        1,
-                    ),
-                    ScopeStatus::Ready(data) => (
-                        format!(
-                            "{}: {} services; WARNING: {}",
+                    ScopeStatus::Loading => match &scope.freshness.last_error {
+                        Some(error) => (
+                            format!(
+                                "{}: Loading...\nPrevious ERROR: {}",
+                                scope.scope,
+                                diagnostic(error)
+                            ),
+                            Color::Yellow,
+                            3,
+                        ),
+                        None => (format!("{}: Loading...", scope.scope), Color::Yellow, 1),
+                    },
+                    ScopeStatus::Ready(data) => {
+                        let mut text = format!(
+                            "{}: {} services reported | {}",
                             scope.scope,
                             data.services.len(),
-                            diagnostic(&data.warning)
-                        ),
-                        Color::Yellow,
-                        3,
-                    ),
+                            scope.freshness.summary()
+                        );
+                        let mut height = if scope.freshness.refreshing { 2 } else { 1 };
+                        let mut color = if scope.freshness.is_stale() {
+                            Color::Yellow
+                        } else {
+                            Color::Green
+                        };
+                        if let Some(error) = &scope.freshness.last_error {
+                            text.push_str(&format!("\nLast refresh ERROR: {}", diagnostic(error)));
+                            height = 3;
+                            color = Color::Red;
+                        } else if !data.warning.is_empty() {
+                            text.push_str(&format!("\nWARNING: {}", diagnostic(&data.warning)));
+                            height = 3;
+                            color = Color::Yellow;
+                        }
+                        (text, color, height)
+                    }
                     ScopeStatus::Failed(error) => (
                         format!("{} ERROR: {}", scope.scope, diagnostic(error)),
                         Color::Red,
@@ -184,7 +213,7 @@ impl View {
         ])
         .split(area);
         frame.render_widget(
-            Paragraph::new("Pulse | read-only | startup snapshot (no refresh)"),
+            Paragraph::new("Pulse | read-only | r refresh services (manual)"),
             regions[0],
         );
         let scope_regions =
@@ -303,9 +332,7 @@ impl View {
             .unwrap_or_else(|| vec![Line::from("Selected: none")]);
         frame.render_widget(Paragraph::new(details), regions[4]);
         frame.render_widget(
-            Paragraph::new(
-                "j/k move  PgUp/PgDn page  / search  Tab scope  f state  ? help  q quit",
-            ),
+            Paragraph::new("j/k move  / search  Tab scope  f state  r refresh  ? help  q quit"),
             regions[5],
         );
     }

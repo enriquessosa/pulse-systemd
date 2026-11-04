@@ -96,3 +96,44 @@ fn completed_scope_arrives_separately_from_failed_scope() {
     assert_eq!(reports[1].scope, Scope::User);
     assert!(reports[1].result.is_err());
 }
+
+#[test]
+fn discovery_refresh_supersedes_inflight_work_and_can_retry_after_failure() {
+    let (started, calls) = mpsc::channel();
+    let release = Arc::new(AtomicBool::new(false));
+    let mut worker = DiscoveryWorker::spawn(ControlledRunner {
+        started,
+        release: Arc::clone(&release),
+    })
+    .unwrap();
+    calls.recv_timeout(Duration::from_secs(2)).unwrap();
+    let old_id = worker.last_request_id();
+    worker.request(()).unwrap();
+    let latest_id = worker.request(()).unwrap();
+    assert!(latest_id > old_id);
+    release.store(true, Ordering::Relaxed);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut reports = vec![];
+    while reports.len() < 2 {
+        assert!(Instant::now() < deadline);
+        if let Ok(report) = worker.try_recv() {
+            reports.push(report);
+        } else {
+            thread::sleep(Duration::from_millis(2));
+        }
+    }
+    assert!(reports.iter().all(|report| report.id == latest_id));
+    assert!(reports[0].result.is_ok());
+    assert!(reports[1].result.is_err());
+    let retry = worker.request(()).unwrap();
+    let mut count = 0;
+    while count < 2 {
+        assert!(Instant::now() < deadline);
+        if let Ok(report) = worker.try_recv() {
+            assert_eq!(report.id, retry);
+            count += 1;
+        } else {
+            thread::sleep(Duration::from_millis(2));
+        }
+    }
+}

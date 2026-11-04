@@ -1,22 +1,22 @@
 # Milestone handoff
 
-- Milestone 4 delivered: Enter opens properties; l opens recent journal; Tab
-  switches panes; Esc returns to the list; arrows/paging scroll and Left/Right pan;
-  [/] inspect adjacent visible services. Existing list navigation remains intact.
-- Validated .service keys, explicit scoped arguments, separate systemd/journal
-  adapters, strict property parsing, escaped untrusted values, and independent
-  loading/empty/permission-denied/unavailable/error states. Empty and unreported
-  properties differ; journal access warnings remain visible.
-- One inspection worker replaces pending requests and cancels superseded work;
-  scope/name/generation reject stale results. Results are bounded; workers join
-  after terminal restoration. Limits: 100 journal entries, 512 KiB per inspection
-  command, five seconds, 2,000 display lines, 4,096 input chars per displayed line.
-- Validation: full fmt/Clippy/test/build gate passed (38 behavior tests); Nix flake
-  checks passed for both Linux definitions. The ignored subprocess_fixture is
-  invoked by runner tests. Live PTYs read system/user properties and logs;
-  controlled PTYs passed empty/denied/partial/malformed/missing/slow/timeout/overflow
-  states, rapid selection changes, scrolling, resize, and cleanup/child reaping.
-- Limits: independent snapshots without refresh; manager-known units only;
-  NixOS/systemd 260 verified, other distributions/aarch64 runtime unverified.
-  No service mutations, push, or publication.
-- Next: Milestone 5 refresh, freshness/staleness, selection retention, and recovery.
+- Milestone 5 delivered: r refreshes both managers from the list, or both panes
+  for the inspected service. Manual only; the brief specifies no periodic refresh.
+- Last successful data stays visible as STALE during pending/failed refreshes,
+  with independent monotonic retrieval ages and errors per scope/pane. Success
+  clears errors; successful empty results replace old snapshots. No-data failures
+  remain errors. Search/filters, scoped selection, tabs, and offsets are retained
+  where valid; removed rows and shrinking results clamp safely.
+- Discovery and inspection share latest_worker.rs: one running/one replaceable
+  pending request and two results per worker, cancellable under backpressure.
+  Request generations reject obsolete results; inspection also checks scope/name.
+  Existing read-only arguments, timeout/output limits, terminal restoration, and
+  child reaping are preserved. No new dependencies.
+- Validation: fmt, Clippy, 46 behavior tests, and build passed; Nix flake checks
+  passed for both Linux definitions. The ignored subprocess_fixture is invoked by
+  runner tests. Live PTYs verified discovery/inspection refresh and navigation.
+  Controlled PTYs verified stale snapshots, failures/recovery, overlap, timeout,
+  empty results, no unsolicited fetching, and cleanup with both workers busy.
+- Limits: manager-known units only; NixOS/systemd 260 verified. Other distributions
+  and aarch64 runtime remain unverified. No service changes, push, or publication.
+- Next: Milestone 6 release-readiness checks and documentation/shortcut review.
