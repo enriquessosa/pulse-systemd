@@ -106,3 +106,37 @@ impl<R: Runner> Systemd<R> {
         })
     }
 }
+
+impl<R: Runner> Systemd<R> {
+    pub fn properties(
+        &self,
+        key: &crate::model::ServiceKey,
+        cancelled: &AtomicBool,
+    ) -> Result<crate::model::Properties, crate::inspection::InspectError> {
+        use crate::{
+            inspection::{InspectError, read_command},
+            model::Property,
+            parsing::parse_properties,
+        };
+        let property_arg = format!("--property={}", Property::ALL.map(Property::name).join(","));
+        let output = read_command(
+            &self.runner,
+            "systemctl",
+            &[
+                key.scope.flag(),
+                "--no-pager",
+                "--no-ask-password",
+                "--all",
+                &property_arg,
+                "show",
+                "--",
+                &key.name,
+            ],
+            key,
+            cancelled,
+        )?;
+        let mut properties = parse_properties(&output.stdout).map_err(InspectError::Parse)?;
+        properties.warning = display_text(&String::from_utf8_lossy(&output.stderr));
+        Ok(properties)
+    }
+}

@@ -1,4 +1,5 @@
 use crate::{
+    inspection::{Inspection, InspectionReport, InspectionTab},
     model::{ActiveState, Scope, Service},
     systemd::{Discovery, ScopeDiscovery},
 };
@@ -80,19 +81,7 @@ pub struct ScopeState {
     pub status: ScopeStatus,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ServiceKey {
-    pub scope: Scope,
-    pub name: String,
-}
-impl From<&Service> for ServiceKey {
-    fn from(service: &Service) -> Self {
-        Self {
-            scope: service.scope,
-            name: service.name.clone(),
-        }
-    }
-}
+pub use crate::model::ServiceKey;
 
 pub struct App {
     pub show_help: bool,
@@ -100,6 +89,7 @@ pub struct App {
     pub scopes: [ScopeState; 2],
     pub scope_filter: ScopeFilter,
     pub state_filter: StateFilter,
+    pub inspection: Option<Inspection>,
     query: String,
     search_snapshot: Option<(String, Option<ServiceKey>)>,
     selected: Option<ServiceKey>,
@@ -116,6 +106,7 @@ impl Default for App {
             }),
             scope_filter: ScopeFilter::All,
             state_filter: StateFilter::All,
+            inspection: None,
             query: String::new(),
             search_snapshot: None,
             selected: None,
@@ -178,6 +169,31 @@ impl App {
         if self.selected_index(&services).is_none() {
             self.selected = services.first().map(|service| ServiceKey::from(*service));
         }
+        self.sync_inspection();
+    }
+
+    fn sync_inspection(&mut self) {
+        if let Some(inspection) = &self.inspection {
+            match &self.selected {
+                Some(key) if *key != inspection.key => {
+                    self.inspection = Some(Inspection::new(key.clone(), inspection.tab))
+                }
+                None => self.inspection = None,
+                _ => {}
+            }
+        }
+    }
+
+    pub fn apply_inspection(&mut self, report: InspectionReport) {
+        if let Some(inspection) = &mut self.inspection {
+            inspection.apply(report);
+        }
+    }
+
+    fn open_inspection(&mut self, tab: InspectionTab) {
+        if let Some(key) = &self.selected {
+            self.inspection = Some(Inspection::new(key.clone(), tab));
+        }
     }
 
     pub fn apply_discovery(&mut self, report: ScopeDiscovery) {
@@ -213,6 +229,7 @@ impl App {
         let index = self.selected_index(&services).unwrap_or(0);
         let next = index.saturating_add_signed(delta).min(services.len() - 1);
         self.selected = Some(ServiceKey::from(services[next]));
+        self.sync_inspection();
     }
 
     pub fn handle_event(&mut self, event: Event) {
@@ -266,7 +283,42 @@ impl App {
             }
             return;
         }
+        if self.inspection.is_some() {
+            match key.code {
+                KeyCode::Esc => self.inspection = None,
+                KeyCode::Char('q') => self.should_quit = true,
+                KeyCode::Char('?') => self.show_help = true,
+                KeyCode::Char('[') => self.move_selection(-1),
+                KeyCode::Char(']') => self.move_selection(1),
+                code => {
+                    if let Some(inspection) = &mut self.inspection {
+                        match code {
+                            KeyCode::Tab => inspection.switch_tab(),
+                            KeyCode::Up | KeyCode::Char('k') => inspection.scroll(-1),
+                            KeyCode::Down | KeyCode::Char('j') => inspection.scroll(1),
+                            KeyCode::PageUp => inspection.scroll(-(inspection.page_size as isize)),
+                            KeyCode::PageDown => inspection.scroll(inspection.page_size as isize),
+                            KeyCode::Home => inspection.scroll(isize::MIN),
+                            KeyCode::End => inspection.scroll(isize::MAX),
+                            KeyCode::Left => {
+                                inspection.column = inspection.column.saturating_sub(8)
+                            }
+                            KeyCode::Right => {
+                                inspection.column = inspection
+                                    .column
+                                    .saturating_add(8)
+                                    .min(inspection.column_limit)
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            return;
+        }
         match key.code {
+            KeyCode::Enter => self.open_inspection(InspectionTab::Properties),
+            KeyCode::Char('l') => self.open_inspection(InspectionTab::Journal),
             KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
             KeyCode::Char('?') => self.show_help = true,
             KeyCode::Char('/') => {

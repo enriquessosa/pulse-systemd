@@ -12,8 +12,15 @@ is unavailable. Each scope reports loading, successful empty results, warnings,
 or errors independently. Selection follows the scope and unit name when results
 arrive or visible rows change; when hidden, it falls back to the first visible row.
 
-The data is a startup snapshot; refresh, properties, and journal views are not yet
-implemented. The terminal is restored on normal exit, I/O errors, and unwinding
+Enter opens selected-service properties and a bounded recent journal view. Each
+pane independently shows loading, empty, permission-denied, unavailable, or error
+results, preserving access warnings. Properties include identity, description,
+load/active/substate, fragment path, unit-file state, main PID, exit code/status,
+result, and active-enter timestamp. Empty values and unreported fields are distinct.
+
+The list is a startup snapshot; inspection is fetched when opened or when switching
+services. Automatic refresh is not implemented. The terminal is restored on normal
+exit, I/O errors, and unwinding
 panics. Interactive stdin and stdout are required. No service controls or privilege
 escalation are provided by Pulse.
 
@@ -54,7 +61,13 @@ does not attempt escalation.
 | `Tab` | Cycle scope: all, system, user |
 | `f` | Cycle active-state filter: all, active, failed, inactive |
 | `?` | Open help; `?` or `Esc` closes it |
-| `q` or `Esc` while browsing | Quit (`q` also quits from help) |
+| `Enter`, `l` from the list | Inspect properties / open journal |
+| `Tab` while inspecting | Switch Properties / Journal |
+| `Up`/`Down`, `k`/`j`, paging, `Home`/`End` while inspecting | Scroll the current pane |
+| `Left`/`Right` while inspecting | Pan long property/log lines |
+| `[`/`]` while inspecting | Inspect previous/next visible service |
+| `Esc` while inspecting | Return to the list with selection preserved |
+| `q` or `Esc` from the list | Quit (`q` also quits from help/inspection) |
 | `Ctrl-C` | Quit in any mode |
 
 Search and filters compose. Search input is limited to 256 bytes; `q` and `?`
@@ -62,6 +75,16 @@ are literal text during editing. To clear an accepted search, press `/`, `Ctrl-U
 then `Enter`. Status summaries abbreviate long warnings/errors; the diagnostic
 example reports their full bounded text. Terminal resizing preserves selection;
 below 60 columns or 16 rows, a resize prompt replaces the list.
+
+Inspection retrieves the last 100 available journal entries in chronological order;
+`End` jumps to the last displayed line. It does not follow or upload logs. Commands
+retain the five-second timeout and are capped at 512 KiB of combined output per
+inspection command. Display is capped at 2,000 journal lines and 4,096 input
+characters per property/log line before control-character escaping, with visible
+truncation markers. Exceeding the subprocess byte limit reports an error.
+Invalid UTF-8 also reports an error. Warnings about
+restricted journal visibility remain visible even with empty or partial results;
+an empty result means no entries were returned, not proof that none exist.
 
 Forced termination such as SIGKILL cannot run cleanup. Compatibility with other
 systemd Linux distributions is unverified.
@@ -74,7 +97,12 @@ subprocess execution, and the systemd adapter live in separate modules. The
 adapter accepts a mockable `Runner` and preserves independent scope results.
 `src/worker.rs` runs synchronous discovery off the UI thread, delivering each scope
 through a bounded channel. On exit it cancels and joins after terminal restoration.
-UI scroll state stays in `ui::View`; selection/filter state stays in `App`.
+`src/inspection_worker.rs` uses one running request, one replaceable pending
+request, and a two-result channel. Selection changes cancel superseded commands;
+scope/name/request IDs reject late results, including after reopening the same
+service. Closing inspection cancels its request. Workers join after terminal
+restoration. List scroll state stays in `ui::View`; selection/filter and inspection
+state stay in `App` and `inspection.rs`.
 
 The default runner limits each command to five seconds and 4 MiB of combined
 stdout/stderr, supports cancellation, and kills/reaps its direct child on errors.
@@ -83,6 +111,10 @@ avoid deadlocks and uncancellable reader threads. It passes explicit arguments,
 disables pager/color/hyperlinks, and fixes the locale. Invalid UTF-8 and malformed
 listings fail explicitly; unknown state tokens retain their value. Terminal
 controls and bidirectional formatting in descriptions/diagnostics are escaped.
+Inspection values and journal messages receive the same treatment. Property reads
+use explicit `systemctl show` arguments with `--` before the validated service
+name. The journal adapter uses scope-specific `--unit=` / `--user-unit=` arguments
+and disables the pager without suppressing privilege warnings. No shell is used.
 
 Required checks:
 
@@ -98,7 +130,8 @@ cargo build --all-targets --all-features
 
 Tests cover navigation/search/filter transitions, identity-based selection,
 resizing/scrolling, scope isolation, loading/error/empty states, worker cancellation,
-parsing fixtures, and actual subprocess limits. The ignored `subprocess_fixture` is
+property/journal fixtures, unsafe-name rejection, request cancellation/late results,
+and actual subprocess limits. The ignored `subprocess_fixture` is
 a child-process helper invoked by the runner tests, not a skipped behavior test.
 CI runs the same four Cargo checks on pushes and PRs.
 Manually verify help, resizing, each exit shortcut, and restored terminal settings
@@ -107,8 +140,8 @@ validation status; declared tests are not evidence that they have passed.
 
 ## Roadmap and limitations
 
-Next: properties and bounded journal entries, then nonblocking refresh with honest
-error and freshness states, and release validation. Pulse does not currently
-implement these features. Remote hosts, other unit types, service controls, and
+Next: refresh with honest error/freshness states and failure recovery, then release
+validation. Pulse does not currently implement these features. Remote hosts, other
+unit types, service controls, and
 general process monitoring are out of scope. No license has been selected and no
 release is published.

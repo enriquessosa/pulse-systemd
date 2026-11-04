@@ -213,15 +213,3 @@ fn adapter_keeps_empty_success_and_failure_diagnostics_distinct() {
     assert!(!error.to_string().contains('\x1b'));
     assert!(error.to_string().contains("failed"));
 }
-
-// Borrowing a runner lets tests inspect calls without weakening the production interface.
-impl Runner for &MockRunner {
-    fn run(
-        &self,
-        program: &str,
-        args: &[&str],
-        cancelled: &AtomicBool,
-    ) -> Result<CommandOutput, RunError> {
-        (**self).run(program, args, cancelled)
-    }
-}

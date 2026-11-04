@@ -1,20 +1,22 @@
 # Milestone handoff
 
-- Milestone 3 delivered: service table with explicit scope/load/active/substate,
-  selected-row summary, clamped/page navigation, search, scope/active-state filters,
-  help, and resize handling. Selection follows (scope, name); hidden rows fall
-  back to the first visible row. Search editing supports accept/cancel/clear.
-- Discovery runs on one worker with a two-result channel; each scope reports
-  loading, ready/empty, warnings, or failure independently. Exit cancels work,
-  restores the terminal before joining, and preserves subprocess bounds/cleanup.
-- Validation: fmt, Clippy, all 27 behavior tests, and build passed. Nix flake checks
-  passed for both Linux definitions. The ignored subprocess_fixture is a child
-  helper invoked by the runner tests, not an omitted behavior check.
-- Real PTY checks passed against both local NixOS managers for navigation, search,
-  scope, help, resizing, and cleanup. Controlled PTYs also passed normal/empty/
-  partial/denied/missing-tool/slow/timeout cases; slow exit reaped the child.
-- Limits: startup snapshot only (no refresh), manager-known units only, minimum
-  list size 60x16, abbreviated status diagnostics. Other distributions and aarch64
-  runtime remain unverified. No service mutations, push, or publication.
-- Next: Milestone 4 service properties and bounded journal view, reusing the typed
-  models and cancellable runner while keeping all I/O off the UI thread.
+- Milestone 4 delivered: Enter opens properties; l opens recent journal; Tab
+  switches panes; Esc returns to the list; arrows/paging scroll and Left/Right pan;
+  [/] inspect adjacent visible services. Existing list navigation remains intact.
+- Validated .service keys, explicit scoped arguments, separate systemd/journal
+  adapters, strict property parsing, escaped untrusted values, and independent
+  loading/empty/permission-denied/unavailable/error states. Empty and unreported
+  properties differ; journal access warnings remain visible.
+- One inspection worker replaces pending requests and cancels superseded work;
+  scope/name/generation reject stale results. Results are bounded; workers join
+  after terminal restoration. Limits: 100 journal entries, 512 KiB per inspection
+  command, five seconds, 2,000 display lines, 4,096 input chars per displayed line.
+- Validation: full fmt/Clippy/test/build gate passed (38 behavior tests); Nix flake
+  checks passed for both Linux definitions. The ignored subprocess_fixture is
+  invoked by runner tests. Live PTYs read system/user properties and logs;
+  controlled PTYs passed empty/denied/partial/malformed/missing/slow/timeout/overflow
+  states, rapid selection changes, scrolling, resize, and cleanup/child reaping.
+- Limits: independent snapshots without refresh; manager-known units only;
+  NixOS/systemd 260 verified, other distributions/aarch64 runtime unverified.
+  No service mutations, push, or publication.
+- Next: Milestone 5 refresh, freshness/staleness, selection retention, and recovery.

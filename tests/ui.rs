@@ -154,3 +154,61 @@ fn long_search_keeps_the_input_end_visible() {
     }
     assert!(draw(&app, 60, 24).contains("end_"));
 }
+
+#[test]
+fn inspection_renders_loading_properties_logs_errors_and_empty_results() {
+    use pulse::{
+        inspection::{InspectError, InspectionPart, InspectionReport, ReadState},
+        parsing::{parse_journal, parse_properties},
+    };
+    let mut app = populated();
+    key(&mut app, KeyCode::Enter);
+    let selected = app.selected_key().cloned().unwrap();
+    app.inspection.as_mut().unwrap().request_id = Some(1);
+    assert!(draw(&app, 80, 24).contains("Loading properties"));
+    app.apply_inspection(InspectionReport {
+        id: 1,
+        key: selected.clone(),
+        part: InspectionPart::Properties(Ok(parse_properties(include_bytes!(
+            "fixtures/properties.txt"
+        ))
+        .unwrap())),
+    });
+    let output = draw(&app, 80, 24);
+    for expected in [
+        "system / alpha.service",
+        "[Properties]",
+        "MainPID: 123",
+        "FragmentPath: (empty)",
+        "ActiveEnterTimestamp: (not reported)",
+    ] {
+        assert!(output.contains(expected), "{expected}");
+    }
+    key(&mut app, KeyCode::Tab);
+    assert!(draw(&app, 80, 24).contains("Loading journal"));
+    app.apply_inspection(InspectionReport {
+        id: 1,
+        key: selected,
+        part: InspectionPart::Journal(Ok(
+            parse_journal(include_bytes!("fixtures/journal.txt")).unwrap()
+        )),
+    });
+    assert!(draw(&app, 120, 24).contains("Started café helper"));
+    let inspection = app.inspection.as_mut().unwrap();
+    inspection.journal =
+        ReadState::Failed(InspectError::PermissionDenied("Permission denied".into()));
+    assert!(draw(&app, 80, 24).contains("Permission denied"));
+    app.inspection.as_mut().unwrap().journal =
+        ReadState::Ready(parse_journal(b"-- No entries --\n").unwrap());
+    assert!(draw(&app, 80, 24).contains("No recent journal entries returned"));
+    key(&mut app, KeyCode::Tab);
+    app.inspection.as_mut().unwrap().properties = ReadState::Ready(parse_properties(b"").unwrap());
+    assert!(draw(&app, 80, 24).contains("No properties returned"));
+    for (width, height) in [(0, 0), (1, 1), (59, 15), (60, 16)] {
+        draw(&app, width, height);
+    }
+    key(&mut app, KeyCode::Char('?'));
+    let output = draw(&app, 80, 24);
+    assert!(output.contains("Enter: inspect"));
+    assert!(output.contains("Left/Right pan"));
+}

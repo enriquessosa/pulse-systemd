@@ -1,5 +1,6 @@
 use crate::{
     app::{App, ScopeFilter, ScopeStatus},
+    inspection::InspectionTab,
     model::{ActiveState, display_text},
 };
 use ratatui::{
@@ -10,12 +11,14 @@ use ratatui::{
     widgets::{Block, Paragraph, Row, Table, TableState, Wrap},
 };
 
-const HELP: &str = "Keyboard help\n\nUp/Down or k/j: move selection\nPageUp/PageDown: move one visible page\nHome/End: first/last service\n/: edit case-insensitive search (name or description)\nEnter: accept search; Esc: cancel edit\nBackspace: delete; Ctrl-U: clear search while editing\nTab: scope all / system / user\nf: active-state filter all / active / failed / inactive\n?: toggle help; Esc: close help\nq or Esc: quit while browsing; Ctrl-C: quit in any mode\n\nRead-only startup snapshot; refresh is not implemented yet.\nSystem and user discovery results are independent.\nNo service controls, properties, or journal view yet.";
+const HELP: &str = "Keyboard help\n\nUp/Down or k/j: move selection\nPageUp/PageDown: move one visible page\nHome/End: first/last service\n/: edit case-insensitive search (name or description)\nEnter: accept search; Esc: cancel edit\nBackspace: delete; Ctrl-U: clear search while editing\nTab: scope all / system / user\nf: active-state filter all / active / failed / inactive\n?: toggle help; Esc: close help\nq or Esc: quit while browsing; Ctrl-C: quit in any mode\n\nRead-only startup snapshot; refresh is not implemented yet.\nEnter: inspect selected service; l: open journal\nInspection: Tab switches properties/journal; Esc returns to list\nInspection: arrows/paging scroll; Left/Right pan; [/] select service\nRead-only always; no service controls.";
 
 #[derive(Default)]
 pub struct View {
     table: TableState,
     page_size: usize,
+    inspection_page_size: usize,
+    inspection_column_limit: usize,
 }
 
 fn diagnostic(text: &str) -> String {
@@ -59,6 +62,12 @@ fn empty_message(app: &App) -> &'static str {
 }
 
 impl View {
+    pub fn inspection_page_size(&self) -> usize {
+        self.inspection_page_size.max(1)
+    }
+    pub fn inspection_column_limit(&self) -> usize {
+        self.inspection_column_limit
+    }
     pub fn page_size(&self) -> usize {
         self.page_size.max(1)
     }
@@ -67,6 +76,7 @@ impl View {
         let area = frame.area();
         if area.width < 60 || area.height < 16 {
             self.page_size = 1;
+            self.inspection_page_size = 1;
             frame.render_widget(Paragraph::new("Pulse | read-only\nTerminal too small (minimum 60 x 16).\nResize to show services.\nCtrl-C: quit in any mode").wrap(Wrap { trim: false }), area);
             return;
         }
@@ -76,6 +86,59 @@ impl View {
                     .block(Block::bordered().title("Pulse | Help"))
                     .wrap(Wrap { trim: false }),
                 area,
+            );
+            return;
+        }
+        if let Some(inspection) = &app.inspection {
+            let regions = Layout::vertical([
+                Constraint::Length(1),
+                Constraint::Length(2),
+                Constraint::Length(1),
+                Constraint::Min(3),
+                Constraint::Length(1),
+            ])
+            .split(area);
+            frame.render_widget(
+                Paragraph::new("Pulse | read-only | inspection snapshot (no refresh)"),
+                regions[0],
+            );
+            frame.render_widget(
+                Paragraph::new(format!(
+                    "{} / {}",
+                    inspection.key.scope,
+                    display_text(&inspection.key.name)
+                ))
+                .wrap(Wrap { trim: false }),
+                regions[1],
+            );
+            let tabs = match inspection.tab {
+                InspectionTab::Properties => "[Properties]   Journal (last 100 entries)",
+                InspectionTab::Journal => "Properties   [Journal (last 100 entries)]",
+            };
+            frame.render_widget(Paragraph::new(tabs), regions[2]);
+            let lines: Vec<Line> = inspection.lines().into_iter().map(Line::from).collect();
+            self.inspection_column_limit = lines
+                .iter()
+                .map(Line::width)
+                .max()
+                .unwrap_or(0)
+                .saturating_sub(regions[3].width.saturating_sub(2) as usize);
+            let title = format!(
+                "Line {}/{} | column {} | arrows scroll/pan",
+                inspection.row + 1,
+                lines.len(),
+                inspection.column + 1
+            );
+            frame.render_widget(
+                Paragraph::new(lines)
+                    .block(Block::bordered().title(title))
+                    .scroll((inspection.row as u16, inspection.column as u16)),
+                regions[3],
+            );
+            self.inspection_page_size = regions[3].height.saturating_sub(2) as usize;
+            frame.render_widget(
+                Paragraph::new("Tab properties/logs  [/] service  Esc back  ? help  q quit"),
+                regions[4],
             );
             return;
         }

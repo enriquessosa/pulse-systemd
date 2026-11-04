@@ -1,0 +1,11 @@
+Id=alpha.service
+Description=Alpha daemon with key=value
+LoadState=loaded
+ActiveState=active
+SubState=running
+FragmentPath=
+UnitFileState=static
+MainPID=123
+ExecMainCode=0
+ExecMainStatus=0
+Result=success

@@ -195,3 +195,14 @@ impl Runner for ProcessRunner {
         }
     }
 }
+
+impl<R: Runner + ?Sized> Runner for &R {
+    fn run(
+        &self,
+        program: &str,
+        args: &[&str],
+        cancelled: &AtomicBool,
+    ) -> Result<CommandOutput, RunError> {
+        (**self).run(program, args, cancelled)
+    }
+}

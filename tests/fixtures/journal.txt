@@ -1,0 +1,4 @@
+2026-11-04T12:00:00.000001-04:00 alpha[123]: Started café helper
+2026-11-04T12:00:01.000002-04:00 alpha[123]: Multiline message
+    continuation with key=value
+2026-11-04T12:00:02.000003-04:00 alpha[123]: Last entry

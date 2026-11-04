@@ -1,4 +1,7 @@
 pub mod app;
+pub mod inspection;
+pub mod inspection_worker;
+pub mod journal;
 pub mod model;
 pub mod parsing;
 pub mod process;

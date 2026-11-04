@@ -94,3 +94,92 @@ pub fn display_text(text: &str) -> String {
     }
     displayed
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ServiceKey {
+    pub scope: Scope,
+    pub name: String,
+}
+impl From<&Service> for ServiceKey {
+    fn from(service: &Service) -> Self {
+        Self {
+            scope: service.scope,
+            name: service.name.clone(),
+        }
+    }
+}
+
+pub fn valid_service_name(name: &str) -> bool {
+    name.len() <= 255
+        && name != ".service"
+        && name.ends_with(".service")
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b":_.@\\-".contains(&b))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum Property {
+    Id,
+    Description,
+    LoadState,
+    ActiveState,
+    SubState,
+    FragmentPath,
+    UnitFileState,
+    MainPID,
+    ExecMainCode,
+    ExecMainStatus,
+    Result,
+    ActiveEnterTimestamp,
+}
+impl Property {
+    pub const ALL: [Self; 12] = [
+        Self::Id,
+        Self::Description,
+        Self::LoadState,
+        Self::ActiveState,
+        Self::SubState,
+        Self::FragmentPath,
+        Self::UnitFileState,
+        Self::MainPID,
+        Self::ExecMainCode,
+        Self::ExecMainStatus,
+        Self::Result,
+        Self::ActiveEnterTimestamp,
+    ];
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Id => "Id",
+            Self::Description => "Description",
+            Self::LoadState => "LoadState",
+            Self::ActiveState => "ActiveState",
+            Self::SubState => "SubState",
+            Self::FragmentPath => "FragmentPath",
+            Self::UnitFileState => "UnitFileState",
+            Self::MainPID => "MainPID",
+            Self::ExecMainCode => "ExecMainCode",
+            Self::ExecMainStatus => "ExecMainStatus",
+            Self::Result => "Result",
+            Self::ActiveEnterTimestamp => "ActiveEnterTimestamp",
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Properties {
+    pub values: std::collections::BTreeMap<Property, String>,
+    pub warning: String,
+}
+
+pub const JOURNAL_ENTRIES: usize = 100;
+pub const JOURNAL_DISPLAY_LINES: usize = 2000;
+pub const INSPECTION_OUTPUT_BYTES: usize = 512 * 1024;
+pub const DISPLAY_LINE_CHARS: usize = 4096;
+
+#[derive(Debug, Default)]
+pub struct Journal {
+    pub lines: Vec<String>,
+    pub warning: String,
+    pub truncated: bool,
+}

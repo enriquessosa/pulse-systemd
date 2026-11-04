@@ -196,3 +196,63 @@ fn help_releases_repeats_resize_and_exit_work_in_their_modes() {
     key(&mut app, KeyCode::Esc);
     assert!(app.should_quit);
 }
+
+#[test]
+fn inspection_modes_preserve_list_selection_and_scroll_independently() {
+    use pulse::{
+        inspection::{InspectionPart, InspectionReport, InspectionTab},
+        parsing::{parse_journal, parse_properties},
+    };
+    let mut app = populated();
+    key(&mut app, KeyCode::Enter);
+    let selected = app.selected_key().cloned().unwrap();
+    {
+        let inspection = app.inspection.as_mut().unwrap();
+        inspection.request_id = Some(1);
+        inspection.page_size = 3;
+        inspection.column_limit = 20;
+    }
+    app.apply_inspection(InspectionReport {
+        id: 1,
+        key: selected.clone(),
+        part: InspectionPart::Properties(Ok(parse_properties(include_bytes!(
+            "fixtures/properties.txt"
+        ))
+        .unwrap())),
+    });
+    app.apply_inspection(InspectionReport {
+        id: 1,
+        key: selected.clone(),
+        part: InspectionPart::Journal(Ok(
+            parse_journal(include_bytes!("fixtures/journal.txt")).unwrap()
+        )),
+    });
+    key(&mut app, KeyCode::PageDown);
+    assert_eq!(app.inspection.as_ref().unwrap().row, 3);
+    key(&mut app, KeyCode::Right);
+    assert_eq!(app.inspection.as_ref().unwrap().column, 8);
+    key(&mut app, KeyCode::Tab);
+    assert_eq!(app.inspection.as_ref().unwrap().tab, InspectionTab::Journal);
+    assert_eq!(app.inspection.as_ref().unwrap().row, 0);
+    assert_eq!(app.inspection.as_ref().unwrap().column, 0);
+    key(&mut app, KeyCode::End);
+    assert_eq!(app.inspection.as_ref().unwrap().row, 3);
+    assert_eq!(app.selected_key(), Some(&selected));
+    key(&mut app, KeyCode::Char(']'));
+    assert_eq!(
+        app.inspection.as_ref().unwrap().key,
+        *app.selected_key().unwrap()
+    );
+    assert!(app.inspection.as_ref().unwrap().request_id.is_none());
+    key(&mut app, KeyCode::Char('?'));
+    key(&mut app, KeyCode::Esc);
+    assert!(app.inspection.is_some() && !app.show_help && !app.should_quit);
+    key(&mut app, KeyCode::Esc);
+    assert!(app.inspection.is_none() && !app.should_quit);
+    let selected = app.selected_key().cloned();
+    key(&mut app, KeyCode::Char('l'));
+    assert_eq!(app.inspection.as_ref().unwrap().tab, InspectionTab::Journal);
+    assert_eq!(app.selected_key(), selected.as_ref());
+    control(&mut app, 'c');
+    assert!(app.should_quit);
+}
