@@ -8,7 +8,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     let text = if app.show_help {
         "Keyboard help\n\n?  Toggle help\nq / Esc / Ctrl-C  Quit\n\nResize the terminal at any time."
     } else {
-        "Read-only systemd service observatory\n\nFoundation preview: service discovery is not implemented yet.\nNo system or user manager has been queried.\n\n? Help   q Quit"
+        "Read-only systemd service observatory\n\nDiscovery backend is ready; TUI service listing comes next.\nThis screen has not queried either manager.\n\n? Help   q Quit"
     };
     frame.render_widget(
         Paragraph::new(text)
@@ -50,7 +50,7 @@ mod tests {
                     assert!(content.contains(if show_help {
                         "Keyboard help"
                     } else {
-                        "discovery is not implemented"
+                        "TUI service listing comes next"
                     }));
                 }
             }

@@ -1,16 +1,19 @@
 # Milestone handoff
 
-- Milestone 1 delivered: minimal read-only TUI, separated state/rendering/terminal
-  lifecycle, basic tests, README, CI, and pinned Nix development environment.
-  No systemd queries yet; service discovery is Milestone 2.
-- The original Nix setup was only shell.nix: the flake was omitted, not lost.
-  Replaced it with flake.nix/flake.lock providing Cargo, rustc, rustfmt, and Clippy.
-- Validation: flake check passed for both Linux shell definitions; x86_64 shell
-  entry and the full Cargo fmt/Clippy/test/build gate passed with Rust 1.99.0.
-  Four tests passed. Earlier PTY checks passed for help, resizing, all exit keys,
-  terminal attributes, and alternate-screen restoration. aarch64 runtime untested.
-- Sandbox network/daemon and Git-write restrictions were resolved for the required
-  commands through supported escalated execution. Cargo.lock retained and staged.
-  Git identity verified as Carlos Jimenez with the enriquessosa noreply email.
-- Next: Milestone 2, typed system/user service discovery and parsing/error fixtures.
-  No remote, push, license selection, or publication.
+- Milestone 2 implemented: typed scope/service states, strict listing parser,
+  independent system/user results, mockable systemd adapter, and diagnostic
+  `cargo run --example discover`. TUI listing/search remain Milestone 3.
+- Runner uses explicit arguments, fixed locale, no pager/color/hyperlinks, a
+  five-second/4 MiB combined-output bound, cancellation, and direct-child cleanup.
+  rustix was already transitive; its direct use enables safe nonblocking pipes.
+- Validation passed: Nix flake checks for both Linux definitions and the full
+  pinned-shell fmt/Clippy/test/build gate (16 tests). The ignored subprocess_fixture
+  is invoked by runner tests. PTY preview/help/resize/q/Esc/Ctrl-C/cleanup passed.
+- Live NixOS/systemd 260 check passed: 119 system and 37 user services, verified
+  scope counts/columns. Sandboxed bus access fails explicitly; supported escalated
+  read-only checks reached both managers. No unit or system configuration changes.
+- Limits: discovery lists units in manager memory, not all installed unit files;
+  real missing-user-manager/denied-access variants are fixture-tested. Other
+  distributions and aarch64 runtime remain unverified. No push/publication.
+- Next: Milestone 3 navigation and search, using a
+  worker for synchronous discovery so the UI event loop never waits on systemctl.
