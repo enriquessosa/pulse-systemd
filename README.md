@@ -71,8 +71,9 @@ nix --extra-experimental-features 'nix-command flakes' develop
 
 Without Nix, use your Rust toolchain and the same Cargo/build commands above.
 Initial setup needs network access for uncached Nix inputs and Cargo dependencies.
-For development, `cargo run --locked` starts the debug build. There is no approved
-remote repository URL or published package to install yet.
+For development, `cargo run --locked` starts the debug build. The public source
+repository is [enriquessosa/pulse-systemd](https://github.com/enriquessosa/pulse-systemd).
+No version 0.1.0 release, tags, packages, or binary distributions are published.
 
 The read-only discovery diagnostic also works without a TUI:
 
@@ -178,8 +179,9 @@ panic after the session. Its ignored Rust fixture is invoked by the Python suite
 the separate ignored subprocess fixture is invoked by runner tests.
 
 CI is configured to run the locked Cargo gate on stable Rust and in the pinned Nix
-shell, validate both Nix shell definitions, and run terminal PTY regressions. Hosted Actions runs
-remain unverified until an approved repository exists and the workflow runs there.
+shell, validate both Nix shell definitions, and run terminal PTY regressions. The
+[first hosted CI run](https://github.com/enriquessosa/pulse-systemd/actions/runs/41936356123)
+passed both the `check` and `nix` jobs at commit `799312f`.
 Manual live checks should also cover both managers, properties/logs, search/filters,
 refresh, resizing, quit during loading, and restored terminal settings.
 
@@ -194,7 +196,7 @@ Enrique Jimenez Sosa. Dependencies retain their own licenses; see
 attribution and distribution checks. Binary-distribution licensing has not been
 fully cleared; screenshot ownership and third-party material remain to be verified.
 
-Cargo publishing remains disabled (`publish = false`). The `pulse`
-repository/executable name's availability has not been cleared. Repository/name
-approval and release/tag/publication approval remain with the owner. No release
-has been published.
+The [public source repository](https://github.com/enriquessosa/pulse-systemd)
+is published, and MIT licensing is adopted. Version 0.1.0, tags, packages, and
+binary distributions remain unpublished and require separate owner approval.
+Cargo publishing remains disabled (`publish = false`).

@@ -38,7 +38,10 @@ The checked-in `tests/terminal_pty.py` reproduces the new lifecycle regressions.
 CI is configured for the full locked Rust gate, Nix flake/shell validation, and
 terminal PTY checks. Its Nix setup follows the
 [installer's flake documentation](https://github.com/cachix/install-nix-action#usage-with-flakes).
-Hosted Actions has not run: no remote repository was created or pushed.
+After Milestone 6, the [public source repository](https://github.com/enriquessosa/pulse-systemd)
+was published. The [first hosted CI run](https://github.com/enriquessosa/pulse-systemd/actions/runs/41936356123)
+passed both `check` and `nix` jobs at commit `799312f`, including Cargo, Nix, and
+terminal PTY checks. This verifies that run, not future commits or release readiness.
 
 ## Known limits and remaining decisions
 
@@ -55,7 +58,8 @@ Hosted Actions has not run: no remote repository was created or pushed.
 - Binary-distribution licensing is not fully cleared. Verify screenshot ownership,
   incomplete upstream attribution, native/runtime libraries, and any bundled Nix
   closure before release; project MIT adoption does not relicense third-party code.
-- Confirm `pulse` name availability and approve the repository destination before
-  creating a remote. Hosted CI must then be observed before a public release.
-- Version/tag, artifacts, and publication require separate approval. No remote,
-  push, tag, license selection, or publication occurred during Milestone 6.
+- Public source publication as `enriquessosa/pulse-systemd` is complete; MIT is
+  adopted and the first hosted CI run passed. Version 0.1.0, tags, packages, and
+  binary distributions remain unpublished and require separate owner approval.
+- Historically, no remote, push, tag, license selection, or publication occurred
+  during Milestone 6; MIT adoption and source publication followed that milestone.
