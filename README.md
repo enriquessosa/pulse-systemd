@@ -188,7 +188,13 @@ and [docs/PROGRESS.md](docs/PROGRESS.md) for the current handoff.
 
 ## Release and licensing
 
-No license has been selected; there is no `LICENSE` file. Cargo publishing remains
-disabled (`publish = false`). The `pulse` repository/executable name's availability
-has not been cleared. License choice, repository/name approval, and release/tag/
-publication approval remain with the owner. No release has been published.
+Pulse is licensed under the [MIT License](LICENSE). Copyright (c) 2026 Carlos
+Enrique Jimenez Sosa. Dependencies retain their own licenses; see
+[third-party notices](THIRD_PARTY_NOTICES.md) for upstream texts and unresolved
+attribution and distribution checks. Binary-distribution licensing has not been
+fully cleared; screenshot ownership and third-party material remain to be verified.
+
+Cargo publishing remains disabled (`publish = false`). The `pulse`
+repository/executable name's availability has not been cleared. Repository/name
+approval and release/tag/publication approval remain with the owner. No release
+has been published.

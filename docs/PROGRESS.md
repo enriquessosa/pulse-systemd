@@ -16,6 +16,13 @@
   tests are invoked by the Rust/Python harnesses.
 - Limits: manager-known services, manual refresh, normal access permissions;
   other distributions/aarch64 runtime/older tools and hosted Actions unverified.
-- Remaining: owner license/distribution decision, pulse name/repository approval,
-  hosted CI observation, then explicit tag/artifact/publication approval. No
-  license, remote, push, tag, or publication was created.
+- Owner authorized MIT adoption (2026 Carlos Enrique Jimenez Sosa); LICENSE and
+  Cargo metadata added. THIRD_PARTY_NOTICES.md preserves local upstream texts,
+  including Unicode, Zlib, and rustix provenance; no code/dependency/lockfile changes.
+- Remaining: screenshot ownership, incomplete upstream attribution, native/runtime
+  and binary-distribution review, pulse name/repository approval, hosted CI, and
+  explicit tag/artifact/publication approval. No remote, push, tag, or publication.
+- Licensing verification: MIT text/holder and Cargo metadata checked; all 70
+  package declarations and 37 deduplicated local notice texts verified. Full native
+  and pinned Cargo gates, both Nix shell definitions, and all five lifecycle PTYs
+  passed; Nix required sandbox permission for cache/daemon access.

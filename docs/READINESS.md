@@ -49,9 +49,13 @@ Hosted Actions has not run: no remote repository was created or pushed.
 - Unexpected internal worker termination may require restarting Pulse. Force-kill
   or an inaccessible terminal can prevent cleanup. No general process monitor,
   other unit types, remote hosts, or service controls are planned for this MVP.
-- Owner must choose a project license and review distribution obligations. No
-  license or repository URL was invented; `publish = false` remains in Cargo.toml.
+- Following Milestone 6, the owner authorized MIT adoption: Copyright (c) 2026
+  Carlos Enrique Jimenez Sosa. See [LICENSE](../LICENSE) and
+  [third-party notices](../THIRD_PARTY_NOTICES.md). `publish = false` remains set.
+- Binary-distribution licensing is not fully cleared. Verify screenshot ownership,
+  incomplete upstream attribution, native/runtime libraries, and any bundled Nix
+  closure before release; project MIT adoption does not relicense third-party code.
 - Confirm `pulse` name availability and approve the repository destination before
   creating a remote. Hosted CI must then be observed before a public release.
 - Version/tag, artifacts, and publication require separate approval. No remote,
-  push, tag, license selection, or publication occurred during this milestone.
+  push, tag, license selection, or publication occurred during Milestone 6.
