@@ -5,3 +5,4 @@ pub mod process;
 pub mod systemd;
 pub mod terminal;
 pub mod ui;
+pub mod worker;

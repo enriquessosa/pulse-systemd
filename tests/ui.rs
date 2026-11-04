@@ -1,0 +1,156 @@
+mod support;
+
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use pulse::{
+    app::{App, ScopeStatus},
+    model::Scope,
+    ui::View,
+};
+use ratatui::{Terminal, backend::TestBackend, style::Color};
+use support::{report, services};
+
+fn text(terminal: &Terminal<TestBackend>) -> String {
+    terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect()
+}
+fn draw(app: &App, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    render(&mut View::default(), &mut terminal, app);
+    text(&terminal)
+}
+fn render(view: &mut View, terminal: &mut Terminal<TestBackend>, app: &App) {
+    terminal.draw(|frame| view.render(frame, app)).unwrap();
+}
+fn key(app: &mut App, code: KeyCode) {
+    app.handle_event(Event::Key(KeyEvent::new(code, KeyModifiers::NONE)));
+}
+fn populated() -> App {
+    let mut app = App::default();
+    for scope in [Scope::System, Scope::User] {
+        app.apply_discovery(report(scope, services(scope)));
+    }
+    app
+}
+
+#[test]
+fn renders_loading_help_and_tiny_terminals_without_panics() {
+    let mut app = App::default();
+    for (width, height) in [(0, 0), (1, 1), (59, 24), (80, 15), (80, 24), (120, 40)] {
+        let output = draw(&app, width, height);
+        if width >= 60 && height >= 16 {
+            assert!(output.contains("system: Loading"));
+            assert!(output.contains("user: Loading"));
+            assert!(output.contains("Discovering services"));
+        } else if width == 59 {
+            assert!(output.contains("Terminal too small"));
+        }
+    }
+    key(&mut app, KeyCode::Char('?'));
+    let output = draw(&app, 100, 24);
+    for expected in [
+        "Keyboard help",
+        "PageUp/PageDown",
+        "Ctrl-U",
+        "Tab:",
+        "Read-only startup snapshot",
+    ] {
+        assert!(output.contains(expected), "{expected}");
+    }
+}
+
+#[test]
+fn renders_states_scope_selection_and_scrolling() {
+    let mut app = populated();
+    let mut view = View::default();
+    let mut terminal = Terminal::new(TestBackend::new(120, 24)).unwrap();
+    render(&mut view, &mut terminal, &app);
+    let output = text(&terminal);
+    for expected in [
+        "system: 8 services",
+        "user: 8 services",
+        "Scope",
+        "Load",
+        "Active",
+        "Substate",
+        "Description",
+        "not-found",
+        "masked",
+        "Selected: system / alpha.service",
+        "Load: loaded | Active: active | Substate: running",
+    ] {
+        assert!(output.contains(expected), "{expected}");
+    }
+    assert!(view.page_size() > 1);
+    app.set_page_size(view.page_size());
+    key(&mut app, KeyCode::End);
+    render(&mut view, &mut terminal, &app);
+    assert!(text(&terminal).contains("Selected: user / z-worker.service"));
+    let highlighted: Vec<String> = terminal
+        .backend()
+        .buffer()
+        .content
+        .chunks(120)
+        .filter(|row| row.iter().any(|cell| cell.bg == Color::DarkGray))
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect())
+        .collect();
+    assert_eq!(highlighted.len(), 1);
+    assert!(highlighted[0].contains("user") && highlighted[0].contains("z-worker.service"));
+    terminal
+        .resize(ratatui::layout::Rect::new(0, 0, 80, 20))
+        .unwrap();
+    render(&mut view, &mut terminal, &app);
+    assert!(text(&terminal).contains("Selected: user / z-worker.service"));
+}
+
+#[test]
+fn distinguishes_empty_filtered_failed_and_partial_results() {
+    let mut app = App::default();
+    for scope in [Scope::System, Scope::User] {
+        app.apply_discovery(report(scope, vec![]));
+    }
+    assert!(draw(&app, 100, 24).contains("No services reported"));
+    app.apply_discovery(report(Scope::System, services(Scope::System)));
+    key(&mut app, KeyCode::Char('/'));
+    for c in "no-matches".chars() {
+        key(&mut app, KeyCode::Char(c));
+    }
+    assert!(draw(&app, 100, 24).contains("No services match"));
+    key(&mut app, KeyCode::Esc);
+    app.scopes[1].status = ScopeStatus::Failed("Permission denied".into());
+    let output = draw(&app, 100, 24);
+    assert!(output.contains("user ERROR: Permission denied"));
+    assert!(output.contains("alpha.service"));
+    app.scopes[0].status = ScopeStatus::Failed("systemctl missing".into());
+    let output = draw(&app, 100, 24);
+    assert!(output.contains("system ERROR: systemctl missing"));
+    assert!(output.contains("No services available"));
+    assert!(output.contains("Selected: none"));
+}
+
+#[test]
+fn warnings_are_visible_and_failure_diagnostics_cannot_escape_the_terminal() {
+    let mut app = populated();
+    if let ScopeStatus::Ready(data) = &mut app.scopes[0].status {
+        data.warning = "limited visibility".into();
+    }
+    app.scopes[1].status = ScopeStatus::Failed(format!("denied\x1b[2J\u{202e}{}", "x".repeat(200)));
+    let output = draw(&app, 100, 24);
+    assert!(output.contains("WARNING: limited visibility"));
+    assert!(!output.contains('\x1b') && !output.contains('\u{202e}'));
+    assert!(output.contains("[truncated]"));
+}
+
+#[test]
+fn long_search_keeps_the_input_end_visible() {
+    let mut app = populated();
+    key(&mut app, KeyCode::Char('/'));
+    for c in format!("{}end", "é".repeat(100)).chars() {
+        key(&mut app, KeyCode::Char(c));
+    }
+    assert!(draw(&app, 60, 24).contains("end_"));
+}

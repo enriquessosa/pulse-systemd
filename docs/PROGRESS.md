@@ -1,19 +1,20 @@
 # Milestone handoff
 
-- Milestone 2 implemented: typed scope/service states, strict listing parser,
-  independent system/user results, mockable systemd adapter, and diagnostic
-  `cargo run --example discover`. TUI listing/search remain Milestone 3.
-- Runner uses explicit arguments, fixed locale, no pager/color/hyperlinks, a
-  five-second/4 MiB combined-output bound, cancellation, and direct-child cleanup.
-  rustix was already transitive; its direct use enables safe nonblocking pipes.
-- Validation passed: Nix flake checks for both Linux definitions and the full
-  pinned-shell fmt/Clippy/test/build gate (16 tests). The ignored subprocess_fixture
-  is invoked by runner tests. PTY preview/help/resize/q/Esc/Ctrl-C/cleanup passed.
-- Live NixOS/systemd 260 check passed: 119 system and 37 user services, verified
-  scope counts/columns. Sandboxed bus access fails explicitly; supported escalated
-  read-only checks reached both managers. No unit or system configuration changes.
-- Limits: discovery lists units in manager memory, not all installed unit files;
-  real missing-user-manager/denied-access variants are fixture-tested. Other
-  distributions and aarch64 runtime remain unverified. No push/publication.
-- Next: Milestone 3 navigation and search, using a
-  worker for synchronous discovery so the UI event loop never waits on systemctl.
+- Milestone 3 delivered: service table with explicit scope/load/active/substate,
+  selected-row summary, clamped/page navigation, search, scope/active-state filters,
+  help, and resize handling. Selection follows (scope, name); hidden rows fall
+  back to the first visible row. Search editing supports accept/cancel/clear.
+- Discovery runs on one worker with a two-result channel; each scope reports
+  loading, ready/empty, warnings, or failure independently. Exit cancels work,
+  restores the terminal before joining, and preserves subprocess bounds/cleanup.
+- Validation: fmt, Clippy, all 27 behavior tests, and build passed. Nix flake checks
+  passed for both Linux definitions. The ignored subprocess_fixture is a child
+  helper invoked by the runner tests, not an omitted behavior check.
+- Real PTY checks passed against both local NixOS managers for navigation, search,
+  scope, help, resizing, and cleanup. Controlled PTYs also passed normal/empty/
+  partial/denied/missing-tool/slow/timeout cases; slow exit reaped the child.
+- Limits: startup snapshot only (no refresh), manager-known units only, minimum
+  list size 60x16, abbreviated status diagnostics. Other distributions and aarch64
+  runtime remain unverified. No service mutations, push, or publication.
+- Next: Milestone 4 service properties and bounded journal view, reusing the typed
+  models and cancellable runner while keeping all I/O off the UI thread.
