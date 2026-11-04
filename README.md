@@ -1,17 +1,42 @@
 # Pulse
 
 **Pulse** (Processes, Units, Logs, States & Events) is a read-only terminal
-observatory for local systemd **services**. Target MVP: **0.1.0**, pending release
-review. The acronym does not imply general process monitoring.
+observatory for local systemd **services**, built with Rust, Ratatui, and Crossterm.
+It brings service states, properties, and recent journal entries into a
+keyboard-driven interface. Target MVP: **0.1.0**, pending release review.
+The acronym does not imply general process monitoring.
 
-Pulse lists system and user `.service` units with descriptions, load/active/substate,
-manager scope, keyboard navigation, search, and filters. Inspect a service to read
-its properties and bounded recent journal entries. Each manager and inspection
-pane reports its own loading, empty, permission-denied, unavailable, or error state.
+![Pulse service list showing system and user scope counts, service states, and keyboard navigation](assets/screenshots/services.png)
+
+## What it provides
+
+- System and user `.service` listings with descriptions, load/active/substate,
+  and manager scope.
+- Keyboard navigation, search, scope/state filters, help, and resize handling.
+- Service properties and bounded recent journal entries, with scrolling and panning.
+- Manual refresh with selection retention, retrieval ages, and visible stale data.
+
+Each manager and inspection pane reports its own loading, empty, permission-denied,
+unavailable, or error state. Pulse keeps previous successful data visible when a
+refresh fails, rather than presenting a failed read as an empty result.
 
 All subprocesses use explicit arguments for `systemctl list-units`, `systemctl
 show`, or `journalctl`. Pulse has no service controls, shell interpolation, remote
 hosts, privilege escalation, system configuration changes, or journal uploads.
+
+## Service inspection
+
+Press `Enter` on a selected service to inspect its properties. The view includes
+identity, state, unit-file metadata, main PID, exit status, and activation timestamp;
+empty values and unreported fields remain distinct.
+
+![Pulse properties view for a selected system service](assets/screenshots/properties.png)
+
+Switch to **Journal** with `Tab`, or open it directly from the list with `l`.
+Pulse retrieves bounded recent entries without following or uploading logs.
+Scroll through entries, pan long lines, and return to the list with `Esc`.
+
+![Pulse journal view showing recent entries for the selected service](assets/screenshots/journal.png)
 
 ## Requirements
 
