@@ -4,15 +4,31 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::io::{self, IsTerminal, Stdout};
+use std::{
+    io::{self, IsTerminal, Stdout},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 pub type Screen = Terminal<CrosstermBackend<Stdout>>;
 
-struct Restore;
+struct Restore(Arc<AtomicBool>);
+
+impl Restore {
+    fn finish(&self) -> io::Result<()> {
+        if self.0.swap(false, Ordering::Relaxed) {
+            restore()
+        } else {
+            Ok(())
+        }
+    }
+}
 
 impl Drop for Restore {
     fn drop(&mut self) {
-        let _ = restore();
+        let _ = self.finish();
     }
 }
 
@@ -29,17 +45,21 @@ pub fn run(body: impl FnOnce(&mut Screen) -> io::Result<()>) -> io::Result<()> {
             "Pulse requires an interactive terminal on stdin and stdout",
         ));
     }
+    enable_raw_mode()?;
+    let guard = Restore(Arc::new(AtomicBool::new(true)));
+    let active = Arc::clone(&guard.0);
+    let owner = std::thread::current().id();
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let _ = restore();
+        // A worker panic must not disable input in the still-running UI. The
+        // hook remains installed after this session, but then becomes inactive.
+        if std::thread::current().id() == owner && active.swap(false, Ordering::Relaxed) {
+            let _ = restore();
+        }
         previous_hook(info);
     }));
-    enable_raw_mode()?;
-    let guard = Restore;
     execute!(io::stdout(), EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     let result = body(&mut terminal);
-    let cleanup = restore();
-    drop(guard);
-    result.and(cleanup)
+    result.and(guard.finish())
 }

@@ -1,164 +1,169 @@
 # Pulse
 
-Pulse (Processes, Units, Logs, States & Events) is a read-only systemd service
-observatory in development. Target MVP: 0.1.0. The acronym does not imply general
-process monitoring.
+**Pulse** (Processes, Units, Logs, States & Events) is a read-only terminal
+observatory for local systemd **services**. Target MVP: **0.1.0**, pending release
+review. The acronym does not imply general process monitoring.
 
-The TUI lists system and user `.service` units with descriptions, typed
-load/active/substates, and manager scope. It supports keyboard navigation,
-case-insensitive search, scope and active-state filters, help, and resizing.
-Discovery runs on a worker so input remains responsive, including while a manager
-is unavailable. Each scope reports loading, successful empty results, warnings,
-or errors independently. Selection follows the scope and unit name when results
-arrive or visible rows change; when hidden, it falls back to the first visible row.
+Pulse lists system and user `.service` units with descriptions, load/active/substate,
+manager scope, keyboard navigation, search, and filters. Inspect a service to read
+its properties and bounded recent journal entries. Each manager and inspection
+pane reports its own loading, empty, permission-denied, unavailable, or error state.
 
-Enter opens selected-service properties and a bounded recent journal view. Each
-pane independently shows loading, empty, permission-denied, unavailable, or error
-results, preserving access warnings. Properties include identity, description,
-load/active/substate, fragment path, unit-file state, main PID, exit code/status,
-result, and active-enter timestamp. Empty values and unreported fields are distinct.
+All subprocesses use explicit arguments for `systemctl list-units`, `systemctl
+show`, or `journalctl`. Pulse has no service controls, shell interpolation, remote
+hosts, privilege escalation, system configuration changes, or journal uploads.
 
-Discovery runs on startup and on manual refresh. Inspection is fetched when opened,
-when switching services, and on manual refresh. There is no periodic refresh.
-The terminal is restored on normal exit, I/O errors, and unwinding panics.
-Interactive stdin and stdout are required. No service controls or privilege
-escalation are provided by Pulse.
+## Requirements
 
-## Setup and usage
+- Linux with systemd; **NixOS with systemd 260 on x86_64 is verified**. Other
+  distributions and aarch64 runtime behavior remain unverified.
+- `systemctl` and `journalctl` on `PATH`, and the current user's normal bus/journal
+  access. An unavailable user manager or restricted journal does not require
+  privileged execution: Pulse reports the observed error or warning.
+- An interactive terminal on stdin/stdout, at least **60 columns × 16 rows** for
+  the list/inspection view, with support for the displayed Unicode characters.
+- For building: the pinned Nix shell, or a current stable Rust toolchain supporting
+  edition 2024. An older minimum Rust version has not been established.
+- Python 3 is needed only for the terminal lifecycle tests, not to run Pulse.
 
-Use a current stable Rust toolchain supporting edition 2024, or run `nix develop`
-to enter the development shell. `flake.lock` pins nixpkgs and its Cargo, rustc,
-rustfmt, and Clippy tools for x86_64 and aarch64 Linux. No system configuration
-changes are needed. Initial setup requires network access for Nix inputs and
-Cargo dependencies.
+## Build and run
+
+From a local checkout on NixOS:
 
 ```sh
-cargo run
+nix develop
+cargo build --locked --release
+./target/release/pulse
 ```
 
-To exercise discovery without the TUI:
+`flake.lock` pins nixpkgs and the shell's Cargo, rustc, rustfmt, Clippy, and Python.
+Shell definitions exist for x86_64 and aarch64 Linux. If flakes are not enabled,
+use a per-command option, without changing NixOS configuration:
 
 ```sh
-cargo run --example discover
+nix --extra-experimental-features 'nix-command flakes' develop
 ```
 
-The TUI and diagnostic use the same discovery backend. The diagnostic reports both
-scopes separately and exits unsuccessfully if either fails. Discovery uses
-`systemctl list-units --all --type=service`, which lists
-units currently known to each manager, including inactive and not-found entries.
-Installed service files that are not loaded into a manager are not enumerated.
-It retains warnings and failure diagnostics rather than treating errors as empty
-results. Access depends on the current user's manager and bus permissions; Pulse
-does not attempt escalation.
+Without Nix, use your Rust toolchain and the same Cargo/build commands above.
+Initial setup needs network access for uncached Nix inputs and Cargo dependencies.
+For development, `cargo run --locked` starts the debug build. There is no approved
+remote repository URL or published package to install yet.
+
+The read-only discovery diagnostic also works without a TUI:
+
+```sh
+cargo run --locked --example discover
+```
+
+It prints each scope separately and exits unsuccessfully if either fails.
+
+## Keyboard controls
 
 | Key | Action |
 | --- | --- |
-| `Up`/`Down`, `k`/`j` | Move selection (clamps at either end) |
+| `Up`/`Down`, `k`/`j` | Move selection, clamped at either end |
 | `PageUp`/`PageDown`, `Home`/`End` | Move a visible page, or first/last service |
-| `/` | Edit search over unit names and descriptions |
-| `Enter` / `Esc` while searching | Accept / cancel and restore the previous search and selection |
+| `/` | Edit case-insensitive search over names and descriptions |
+| `Enter` / `Esc` while searching | Accept / cancel and restore previous search/selection |
 | `Backspace`, `Ctrl-U` while searching | Delete a character / clear search |
-| `Tab` | Cycle scope: all, system, user |
-| `f` | Cycle active-state filter: all, active, failed, inactive |
-| `r` from the list | Refresh both system and user discovery |
-| `r` while inspecting | Refresh properties and journal for this service |
-| `?` | Open help; `?` or `Esc` closes it |
+| `Tab` from the list | Cycle scope: all, system, user |
+| `f` from the list | Cycle active-state filter: all, active, failed, inactive |
+| `r` from the list | Refresh both managers |
 | `Enter`, `l` from the list | Inspect properties / open journal |
 | `Tab` while inspecting | Switch Properties / Journal |
-| `Up`/`Down`, `k`/`j`, paging, `Home`/`End` while inspecting | Scroll the current pane |
-| `Left`/`Right` while inspecting | Pan long property/log lines |
+| `Up`/`Down`, `k`/`j`, paging, `Home`/`End` while inspecting | Scroll current pane |
+| `Left`/`Right` while inspecting | Pan long lines |
 | `[`/`]` while inspecting | Inspect previous/next visible service |
-| `Esc` while inspecting | Return to the list with selection preserved |
+| `r` while inspecting | Refresh both properties and journal for this service |
+| `Esc` while inspecting | Return to list, preserving selection |
+| `?` | Open help; `?` or `Esc` closes help |
 | `q` or `Esc` from the list | Quit (`q` also quits from help/inspection) |
 | `Ctrl-C` | Quit in any mode |
 
 Search and filters compose. Search input is limited to 256 bytes; `q`, `?`, and `r`
-are literal text during editing. To clear an accepted search, press `/`, `Ctrl-U`,
-then `Enter`. Status summaries abbreviate long warnings/errors; the diagnostic
-example reports their full bounded text. Terminal resizing preserves selection;
-below 60 columns or 16 rows, a resize prompt replaces the list.
+are literal text while editing. Clear an accepted search with `/`, `Ctrl-U`, `Enter`.
+Resizing preserves selection; a resize prompt replaces views below the minimum size.
 
-During refresh, the last successful snapshot stays visible and is marked `STALE`.
-Each scope and inspection pane shows the age of its own last successful retrieval.
-A failed refresh preserves that data, its original timestamp, and the latest error;
-press `r` to retry. Successful empty results replace old data. Initial failures
-without a successful snapshot show errors without fabricated empty results.
-Snapshot age is always visible; `STALE` specifically marks pending or failed
-refreshes, rather than applying an arbitrary age threshold.
+## Snapshots, access, and limits
 
-Refresh retains search, filters, selected scope/unit identity, the inspection tab,
-and scroll/pan offsets where possible. Removed or filtered-out services fall back
-to the first visible row; offsets clamp when results shrink. Repeated refreshes
-cancel superseded work and replace the pending request; late results cannot
-overwrite the current request, even for the same service. Refreshing inspection
-does not also refresh the underlying service list.
+Discovery runs on startup and manual refresh. Inspection is fetched on opening,
+service changes, and manual refresh. **There is no periodic refresh or log follow.**
+Inspection refresh does not also refresh the underlying service list.
 
-Inspection retrieves the last 100 available journal entries in chronological order;
-`End` jumps to the last displayed line. It does not follow or upload logs. Commands
-retain the five-second timeout and are capped at 512 KiB of combined output per
-inspection command. Display is capped at 2,000 journal lines and 4,096 input
-characters per property/log line before control-character escaping, with visible
-truncation markers. Exceeding the subprocess byte limit reports an error.
-Invalid UTF-8 also reports an error. Warnings about
-restricted journal visibility remain visible even with empty or partial results;
-an empty result means no entries were returned, not proof that none exist.
+Each manager/pane shows the age of its last successful retrieval. During a pending
+or failed refresh, its previous data stays visible as `STALE`, retaining the
+retrieval timestamp and latest error. `r` retries normal command failures. Successful empty results
+replace old data. Initial failures do not fabricate empty results. `STALE` marks
+pending/failed refreshes, rather than an arbitrary age threshold.
 
-Forced termination such as SIGKILL cannot run cleanup. Compatibility with other
-systemd Linux distributions is unverified.
+Selection follows `(scope, name)`. Refresh preserves search, filters, inspection
+tab, and scroll/pan offsets where valid; removed/filtered rows fall back to the
+first visible row and shrinking results clamp offsets. Superseded work is cancelled
+and late results cannot replace a newer request.
 
-## Development
+- Discovery uses `list-units --all --type=service`: units known to each manager,
+  including inactive and not-found entries. **Unloaded installed service files
+  are not enumerated.** Discovery commands allow five seconds and 4 MiB combined
+  stdout/stderr each.
+- Properties include identity, description, load/active/substate, fragment path,
+  unit-file state, main PID, exit code/status, result, and active-enter timestamp.
+  Empty values and unreported fields are distinct.
+- Inspection commands allow five seconds and **512 KiB** combined output each.
+  Journal retrieval requests the last **100 entries**, in chronological order;
+  `End` jumps to the last displayed line. Display is capped at **2,000 journal
+  lines** and **4,096 input characters per property/log line** before escaping,
+  with truncation markers. Exceeding the subprocess byte limit reports an error.
+- Malformed property/list output or invalid UTF-8 reports an error. Untrusted
+  terminal controls and bidirectional formatting are escaped. Long status summaries
+  are abbreviated; inspection supports horizontal panning.
+- Access warnings remain visible with empty/partial journal results. No returned
+  entries is not proof that no entries exist. Pulse never tries to grant access.
+- Terminal restoration is attempted on normal exit, I/O errors, and unwinding UI
+  panics. SIGKILL and an inaccessible terminal can prevent cleanup. An unexpected
+  internal worker termination may require quitting and reopening Pulse.
 
-State/input handling lives in `src/app.rs`, rendering in `src/ui.rs`, and terminal
-setup/restoration in `src/terminal.rs`. Typed service models, listing parsing,
-subprocess execution, and the systemd adapter live in separate modules. The
-adapter accepts a mockable `Runner` and preserves independent scope results.
-`src/worker.rs` and `src/inspection_worker.rs` run synchronous adapters off the UI
-thread, sharing `latest_worker.rs`: one running request, one replaceable pending
-request, and two bounded results per worker. Request IDs protect discovery;
-scope/name/request IDs also protect inspection, including reopening a service.
-Closing inspection cancels its request. Cancellation remains active even with a
-full result queue. Workers join after terminal restoration. List scroll state stays
-in `ui::View`; selection/filter and inspection state stay in `App` and
-`inspection.rs`. `freshness.rs` tracks monotonic retrieval age and refresh errors
-independently of the retained data.
+Other unit types, service controls, remote hosts, and general process monitoring
+remain out of scope.
 
-The default runner limits each command to five seconds and 4 MiB of combined
-stdout/stderr, supports cancellation, and kills/reaps its direct child on errors.
-Nonblocking pipe reads use `rustix`, already present in the dependency graph, to
-avoid deadlocks and uncancellable reader threads. It passes explicit arguments,
-disables pager/color/hyperlinks, and fixes the locale. Invalid UTF-8 and malformed
-listings fail explicitly; unknown state tokens retain their value. Terminal
-controls and bidirectional formatting in descriptions/diagnostics are escaped.
-Inspection values and journal messages receive the same treatment. Property reads
-use explicit `systemctl show` arguments with `--` before the validated service
-name. The journal adapter uses scope-specific `--unit=` / `--user-unit=` arguments
-and disables the pager without suppressing privilege warnings. No shell is used.
+## Development and validation
 
-Required checks:
+UI/input state, rendering, typed models, parsing, adapters, and subprocess execution
+are separate modules. Discovery and inspection use a shared bounded worker: one
+running request, one replaceable pending request, two results. Generation IDs reject
+obsolete results; inspection also checks scope/name. Workers cancel and reap their
+direct child processes and join after terminal restoration. `rustix` provides safe
+nonblocking pipe operations; there are three direct Rust dependencies.
+
+Run the full gate in the pinned shell:
 
 ```sh
-nix flake check
-nix develop --command cargo --version
+nix flake check --all-systems --no-update-lock-file
 nix develop
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
-cargo build --all-targets --all-features
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-targets --all-features
+cargo build --locked --all-targets --all-features
+python3 tests/terminal_pty.py
 ```
 
-Tests cover navigation/search/filter transitions, identity-based selection,
-resizing/scrolling, scope isolation, loading/error/empty states, worker cancellation,
-property/journal fixtures, unsafe-name rejection, request cancellation/late results,
-refresh failure/recovery, selection retention, and actual subprocess limits.
-The ignored `subprocess_fixture` is
-a child-process helper invoked by the runner tests, not a skipped behavior test.
-CI runs the same four Cargo checks on pushes and PRs.
-Manually verify help, resizing, each exit shortcut, and restored terminal settings
-in an interactive terminal after building. See `docs/PROGRESS.md` for actual
-validation status; declared tests are not evidence that they have passed.
+Tests cover parsing fixtures, scope/name arguments, navigation, selection, refresh
+failure/recovery, stale generations, output bounds, timeouts, and cancellation.
+The terminal PTY suite checks success, I/O failure, UI panic, worker panic, and a
+panic after the session. Its ignored Rust fixture is invoked by the Python suite;
+the separate ignored subprocess fixture is invoked by runner tests.
 
-## Roadmap and limitations
+CI is configured to run the locked Cargo gate on stable Rust and in the pinned Nix
+shell, validate both Nix shell definitions, and run terminal PTY regressions. Hosted Actions runs
+remain unverified until an approved repository exists and the workflow runs there.
+Manual live checks should also cover both managers, properties/logs, search/filters,
+refresh, resizing, quit during loading, and restored terminal settings.
 
-Next: Milestone 6 release-readiness validation and review. Remote hosts, other unit
-types, service controls, and general process monitoring remain out of scope.
-No license has been selected and no release is published.
+See [docs/READINESS.md](docs/READINESS.md) for the 0.1.0 review and remaining decisions,
+and [docs/PROGRESS.md](docs/PROGRESS.md) for the current handoff.
+
+## Release and licensing
+
+No license has been selected; there is no `LICENSE` file. Cargo publishing remains
+disabled (`publish = false`). The `pulse` repository/executable name's availability
+has not been cleared. License choice, repository/name approval, and release/tag/
+publication approval remain with the owner. No release has been published.

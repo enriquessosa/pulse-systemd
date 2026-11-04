@@ -1,22 +1,21 @@
 # Milestone handoff
 
-- Milestone 5 delivered: r refreshes both managers from the list, or both panes
-  for the inspected service. Manual only; the brief specifies no periodic refresh.
-- Last successful data stays visible as STALE during pending/failed refreshes,
-  with independent monotonic retrieval ages and errors per scope/pane. Success
-  clears errors; successful empty results replace old snapshots. No-data failures
-  remain errors. Search/filters, scoped selection, tabs, and offsets are retained
-  where valid; removed rows and shrinking results clamp safely.
-- Discovery and inspection share latest_worker.rs: one running/one replaceable
-  pending request and two results per worker, cancellable under backpressure.
-  Request generations reject obsolete results; inspection also checks scope/name.
-  Existing read-only arguments, timeout/output limits, terminal restoration, and
-  child reaping are preserved. No new dependencies.
-- Validation: fmt, Clippy, 46 behavior tests, and build passed; Nix flake checks
-  passed for both Linux definitions. The ignored subprocess_fixture is invoked by
-  runner tests. Live PTYs verified discovery/inspection refresh and navigation.
-  Controlled PTYs verified stale snapshots, failures/recovery, overlap, timeout,
-  empty results, no unsolicited fetching, and cleanup with both workers busy.
-- Limits: manager-known units only; NixOS/systemd 260 verified. Other distributions
-  and aarch64 runtime remain unverified. No service changes, push, or publication.
-- Next: Milestone 6 release-readiness checks and documentation/shortcut review.
+- Milestone 6 complete for owner review; details in docs/READINESS.md. Audited
+  read-only adapters, bounds, errors, state/worker separation, dependencies, and
+  tests. No feature expansion or new Rust dependencies; lockfiles unchanged.
+- Fixed terminal lifecycle: one cleanup; UI-thread/active-session panic ownership.
+  The worker-panic regression failed before the fix. All five checked-in PTY
+  lifecycle cases now pass and run in CI; Python added to the pinned dev shell.
+- README rewritten for accurate requirements, NixOS/native build/run, shortcuts,
+  snapshot/access limits, testing, and licensing/release status. CI now enforces
+  Cargo.lock, validates Nix, and runs lifecycle PTYs; actionlint passed.
+- Verified: complete fmt/Clippy/test/build gates (46 Rust behavior tests) on native
+  Rust 1.95.0 and pinned 1.99.0, both Nix shell definitions, x86_64 shell entry,
+  lifecycle PTYs, optimized build, and live/controlled service UI PTYs including
+  refresh failures, cancellation, and child/terminal cleanup. Fixture-only ignored
+  tests are invoked by the Rust/Python harnesses.
+- Limits: manager-known services, manual refresh, normal access permissions;
+  other distributions/aarch64 runtime/older tools and hosted Actions unverified.
+- Remaining: owner license/distribution decision, pulse name/repository approval,
+  hosted CI observation, then explicit tag/artifact/publication approval. No
+  license, remote, push, tag, or publication was created.
